@@ -1,0 +1,377 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEWMASTER Admin</title>
+<style>
+:root{color-scheme:dark;--bg:#0c110e;--panel:#151e18;--green:#75e69a;--text:#f1f5f2;--muted:#a5b3a9;--border:#2b3a30}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px Arial}
+header{padding:25px;background:#14251a;border-bottom:1px solid var(--border)}
+header strong{font-size:28px;color:var(--green);letter-spacing:2px}
+main{width:min(950px,94%);margin:25px auto}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:13px;padding:20px;margin-bottom:18px}
+h2{font-size:20px;margin-top:0}
+p{color:var(--muted);line-height:1.5}
+label{display:block;margin:13px 0 6px;color:var(--muted);font-size:13px}
+input,textarea,select{width:100%;padding:12px;background:#0c1510;color:white;border:1px solid var(--border);border-radius:8px;font:inherit}
+textarea{min-height:100px;resize:vertical}
+button{padding:12px 16px;border:0;border-radius:8px;background:var(--green);color:#07130b;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.5}
+.secondary{background:#26372c;color:white}
+.danger{background:#632c2c;color:white}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.item{padding:14px;border:1px solid var(--border);border-radius:9px;margin:10px 0}
+.item small{display:block;color:var(--muted);margin-top:7px}
+#status{white-space:pre-wrap;color:var(--green);margin-top:12px}
+a{color:var(--green)}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<strong>NEWMASTER</strong>
+<p>Painel administrativo de ports</p>
+</header>
+<main>
+<section class="panel">
+<h2>1. Acesso administrativo</h2>
+<p>Use um Fine-grained token com acesso somente ao repositório NEWMASTER e permissão Contents: Read and write. O token fica apenas na memória desta página.</p>
+<label>Token do GitHub</label>
+<input id="token" type="password" autocomplete="off" placeholder="github_pat_...">
+<div class="actions">
+<button id="connect">Conectar</button>
+<button class="secondary" id="disconnect">Desconectar</button>
+</div>
+<div id="status">Desconectado.</div>
+</section>
+
+<section class="panel">
+<h2>2. Cadastrar ou editar jogo</h2>
+<form id="form">
+<input type="hidden" id="editId">
+<label>Nome do jogo *</label>
+<input id="name" required maxlength="100" placeholder="Nome do jogo">
+
+<div class="grid">
+<div>
+<label>Versão *</label>
+<input id="version" required placeholder="1.0.0">
+</div>
+<div>
+<label>Categoria *</label>
+<select id="category" required>
+<option value="">Selecione</option>
+<option>Plataforma</option>
+<option>Ação</option>
+<option>Aventura</option>
+<option>RPG</option>
+<option>Corrida</option>
+<option>Puzzle</option>
+<option>Arcade</option>
+<option>Emulação</option>
+<option>Utilitário</option>
+<option>Outros</option>
+</select>
+</div>
+</div>
+
+<label>Sistema</label>
+<input id="system" value="ArkOS">
+
+<label>Descrição *</label>
+<textarea id="description" required maxlength="5000" placeholder="Descrição do port..."></textarea>
+
+<label>Arquivo ZIP</label>
+<input id="zip" type="file" accept=".zip,application/zip">
+
+<p>Para um jogo novo, o ZIP é obrigatório. Na edição, é opcional.</p>
+<div class="actions">
+<button id="publish" type="submit">Publicar jogo</button>
+<button class="secondary" type="button" id="clear">Limpar</button>
+</div>
+</form>
+</section>
+
+<section class="panel">
+<h2>3. Jogos publicados</h2>
+<button class="secondary" id="reload">Atualizar lista</button>
+<div id="games"></div>
+</section>
+
+<section class="panel">
+<a href="https://canaldetudodopietro-png.github.io/NEWMASTER/">Abrir site público NEWMASTER</a>
+</section>
+</main>
+
+<script>
+const OWNER="canaldetudodopietro-png";
+const REPO="NEWMASTER";
+const API=`https://api.github.com/repos/${OWNER}/${REPO}`;
+
+const $=id=>document.getElementById(id);
+let token="";
+let releases=[];
+
+function status(message,error=false){
+ $("status").textContent=message;
+ $("status").style.color=error?"#ff7777":"#75e69a";
+}
+
+function authHeaders(){
+ return {
+  "Accept":"application/vnd.github+json",
+  "Authorization":"Bearer "+token,
+  "X-GitHub-Api-Version":"2022-11-28"
+ };
+}
+
+async function api(url,options={}){
+ const response=await fetch(url,{
+  ...options,
+  headers:{...authHeaders(),...(options.headers||{})}
+ });
+
+ if(!response.ok){
+  let message="";
+  try{message=(await response.json()).message||""}catch{}
+  throw new Error("GitHub HTTP "+response.status+": "+message);
+ }
+
+ if(response.status===204)return null;
+ return response.json();
+}
+
+function slug(value){
+ return value.normalize("NFD")
+ .replace(/[\u0300-\u036f]/g,"")
+ .toLowerCase()
+ .replace(/[^a-z0-9]+/g,"-")
+ .replace(/^-|-$/g,"")
+ .slice(0,45)||"port";
+}
+
+function releaseDescription(){
+ return "Categoria: "+$("category").value+
+ "\nSistema: "+($("system").value.trim()||"ArkOS")+
+ "\nVersão: "+$("version").value.trim()+
+ "\n\n"+$("description").value.trim();
+}
+
+function parseDescription(body){
+ const result={category:"Outros",system:"ArkOS",version:"",description:""};
+ const rest=[];
+ for(const line of (body||"").split(/\r?\n/)){
+  const match=line.match(/^\s*(Categoria|Sistema|Versão)\s*:\s*(.*)$/i);
+  if(!match){rest.push(line);continue}
+  const key=match[1].toLowerCase();
+  if(key==="categoria")result.category=match[2];
+  if(key==="sistema")result.system=match[2];
+  if(key==="versão")result.version=match[2];
+ }
+ result.description=rest.join("\n").trim();
+ return result;
+}
+
+async function uploadAsset(release,file){
+ const url=release.upload_url.replace(/\{.*$/,"")+
+  "?name="+encodeURIComponent(file.name);
+
+ return api(url,{
+  method:"POST",
+  headers:{"Content-Type":"application/zip"},
+  body:file
+ });
+}
+
+async function loadGames(){
+ if(!token)throw new Error("Conecte ao GitHub primeiro.");
+ status("Carregando jogos...");
+ releases=await api(API+"/releases?per_page=100");
+ renderGames();
+ status(releases.length+" publicação(ões) encontradas.");
+}
+
+function renderGames(){
+ const root=$("games");
+ root.replaceChildren();
+
+ const visible=releases.filter(r=>!r.draft);
+
+ if(!visible.length){
+  root.textContent="Nenhuma publicação encontrada.";
+  return;
+ }
+
+ for(const r of visible){
+  const meta=parseDescription(r.body);
+  const div=document.createElement("div");
+  div.className="item";
+
+  const title=document.createElement("strong");
+  title.textContent=r.name||r.tag_name;
+
+  const info=document.createElement("small");
+  info.textContent="Versão: "+(meta.version||"não informada")+
+   " | Categoria: "+meta.category+
+   " | ZIPs: "+r.assets.filter(a=>a.name.toLowerCase().endsWith(".zip")).length;
+
+  const actions=document.createElement("div");
+  actions.className="actions";
+
+  const edit=document.createElement("button");
+  edit.textContent="Editar";
+  edit.className="secondary";
+  edit.onclick=()=>editGame(r.id);
+
+  const open=document.createElement("a");
+  open.href=r.html_url;
+  open.target="_blank";
+  open.rel="noopener";
+  open.textContent="Ver publicação";
+
+  actions.append(edit,open);
+  div.append(title,info,actions);
+  root.append(div);
+ }
+}
+
+function editGame(id){
+ const r=releases.find(x=>x.id===id);
+ if(!r)return;
+
+ const m=parseDescription(r.body);
+ $("editId").value=String(r.id);
+ $("name").value=r.name||r.tag_name;
+ $("version").value=m.version;
+ $("category").value=m.category;
+ $("system").value=m.system;
+ $("description").value=m.description;
+ $("zip").value="";
+ $("publish").textContent="Salvar alterações";
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function clearForm(){
+ $("form").reset();
+ $("editId").value="";
+ $("system").value="ArkOS";
+ $("publish").textContent="Publicar jogo";
+}
+
+$("connect").onclick=async()=>{
+ const candidate=$("token").value.trim();
+ if(!candidate){status("Digite o token.",true);return}
+ token=candidate;
+
+ try{
+  const user=await api("https://api.github.com/user");
+  await loadGames();
+  status("Conectado como "+user.login+".");
+ }catch(e){
+  token="";
+  status("Falha na conexão: "+e.message,true);
+ }
+};
+
+$("disconnect").onclick=()=>{
+ token="";
+ releases=[];
+ $("token").value="";
+ $("games").textContent="Desconectado.";
+ status("Token removido da memória da página.");
+};
+
+$("reload").onclick=()=>loadGames().catch(e=>status(e.message,true));
+$("clear").onclick=clearForm;
+
+$("form").onsubmit=async event=>{
+ event.preventDefault();
+
+ if(!token){status("Conecte ao GitHub primeiro.",true);return}
+
+ const name=$("name").value.trim();
+ const version=$("version").value.trim();
+ const file=$("zip").files[0];
+ const id=$("editId").value;
+
+ if(!id&&!file){status("Selecione o ZIP do jogo.",true);return}
+ if(file&&!file.name.toLowerCase().endsWith(".zip")){
+  status("Selecione um arquivo ZIP válido.",true);return;
+ }
+ if(file&&file.size>2*1024*1024*1024){
+  status("Arquivo maior que 2 GiB.",true);return;
+ }
+
+ $("publish").disabled=true;
+
+ try{
+  if(id){
+   const release=releases.find(r=>String(r.id)===id);
+   if(!release)throw new Error("Release não encontrada. Atualize a lista.");
+
+   await api(API+"/releases/"+id,{
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+     name:name,
+     body:releaseDescription()
+    })
+   });
+
+   if(file){
+    // Remove os ZIPs anteriores para evitar duplicatas.
+    for(const asset of release.assets.filter(a=>a.name.toLowerCase().endsWith(".zip"))){
+     await api(API+"/releases/assets/"+asset.id,{method:"DELETE"});
+    }
+    await uploadAsset(release,file);
+   }
+
+   status("Publicação atualizada.");
+  }else{
+   const tag=slug(name)+"-v"+slug(version);
+
+   if(releases.some(r=>r.tag_name===tag)){
+    throw new Error("Essa versão já existe. Escolha outra versão ou edite a publicação.");
+   }
+
+   // Primeiro cria como rascunho.
+   const release=await api(API+"/releases",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+     tag_name:tag,
+     name:name,
+     body:releaseDescription(),
+     draft:true,
+     prerelease:false
+    })
+   });
+
+   // Faz o upload e só então publica.
+   await uploadAsset(release,file);
+
+   await api(API+"/releases/"+release.id,{
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({draft:false})
+   });
+
+   status("Jogo enviado e publicado com sucesso!");
+  }
+
+  clearForm();
+  await loadGames();
+
+ }catch(e){
+  status("Erro: "+e.message,true);
+ }finally{
+  $("publish").disabled=false;
+ }
+};
+</script>
+</body>
+</html>
