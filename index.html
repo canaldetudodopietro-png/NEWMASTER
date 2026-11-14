@@ -1,0 +1,405 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101810">
+  <title>NEWMASTER — Ports para R36S</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c110e;
+      --panel: #151e18;
+      --panel2: #1b2920;
+      --green: #75e69a;
+      --text: #f1f5f2;
+      --muted: #a5b3a9;
+      --border: #2b3a30;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    header {
+      padding: 34px 18px;
+      text-align: center;
+      background: linear-gradient(140deg, #14251a, #0c110e 70%);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      color: var(--green);
+      font-size: clamp(34px, 7vw, 54px);
+      font-weight: 900;
+      letter-spacing: 3px;
+    }
+    header p { color: var(--muted); margin: 10px 0 0; }
+    main { width: min(1100px, 94%); margin: 28px auto 60px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input, select, button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 15px;
+      font-size: 15px;
+    }
+    input, select {
+      background: var(--panel);
+      color: var(--text);
+    }
+    input { flex: 1 1 240px; min-width: 0; }
+    select { flex: 0 1 200px; }
+    button {
+      cursor: pointer;
+      background: var(--green);
+      color: #07130b;
+      font-weight: 800;
+      border: 0;
+    }
+    button:disabled { opacity: .5; cursor: wait; }
+    #status {
+      color: var(--muted);
+      margin: 14px 2px;
+      min-height: 22px;
+    }
+    #catalog {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .port {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .port h2 { margin: 0 0 9px; font-size: 20px; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 12px;
+    }
+    .tag {
+      color: var(--green);
+      background: #203528;
+      border-radius: 20px;
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+    .description {
+      color: var(--muted);
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      flex: 1;
+    }
+    .downloads { display: grid; gap: 8px; margin-top: 18px; }
+    .download {
+      display: block;
+      text-align: center;
+      padding: 12px;
+      border-radius: 9px;
+      background: var(--green);
+      color: #07130b;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .download:hover { filter: brightness(1.08); }
+    .release-link {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      margin-top: 12px;
+    }
+    .release-link a { color: var(--green); }
+    .empty {
+      color: var(--muted);
+      background: var(--panel);
+      padding: 25px;
+      border-radius: 12px;
+      grid-column: 1 / -1;
+      text-align: center;
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--muted);
+      padding: 25px;
+      font-size: 13px;
+    }
+    footer a { color: var(--green); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">NEWMASTER</div>
+    <p>Catálogo independente de ports para R36S e ArkOS</p>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <input id="search" type="search"
+        placeholder="Pesquisar jogos e ports..." aria-label="Pesquisar">
+      <select id="category" aria-label="Filtrar categoria">
+        <option value="">Todas as categorias</option>
+      </select>
+      <button id="refresh" type="button">Atualizar catálogo</button>
+    </div>
+
+    <div id="status" role="status">Carregando catálogo...</div>
+    <section id="catalog" aria-live="polite"></section>
+  </main>
+
+  <footer>
+    NEWMASTER — catálogo independente.
+    Não afiliado ao PortMaster.
+    <br>
+    <a id="githubLink" href="#" target="_blank" rel="noopener">
+      Repositório do NEWMASTER
+    </a>
+  </footer>
+
+  <script>
+    // CONFIGURAÇÃO: altere estes dois valores.
+    const GITHUB_OWNER = "canaldetudodopietro-png";
+    const GITHUB_REPO = "NEWMASTER";
+
+    const API_URL =
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`;
+
+    const catalog = document.getElementById("catalog");
+    const statusBox = document.getElementById("status");
+    const searchBox = document.getElementById("search");
+    const categoryBox = document.getElementById("category");
+    const refreshButton = document.getElementById("refresh");
+
+    let ports = [];
+
+    document.getElementById("githubLink").href =
+      `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`;
+
+    function metadataFromBody(body) {
+      const result = {
+        category: "Outros",
+        system: "ArkOS",
+        version: ""
+      };
+
+      const lines = (body || "").split(/\r?\n/);
+      const description = [];
+
+      for (const line of lines) {
+        const match = line.match(/^\s*(Categoria|Sistema|Versão)\s*:\s*(.+)$/i);
+
+        if (!match) {
+          description.push(line);
+          continue;
+        }
+
+        const key = match[1].toLowerCase();
+        const value = match[2].trim();
+
+        if (key === "categoria") result.category = value;
+        if (key === "sistema") result.system = value;
+        if (key === "versão") result.version = value;
+      }
+
+      result.description = description.join("\n").trim() ||
+        "Port publicado no catálogo NEWMASTER.";
+
+      return result;
+    }
+
+    function makeTag(text) {
+      const span = document.createElement("span");
+      span.className = "tag";
+      span.textContent = text;
+      return span;
+    }
+
+    function createPortCard(port) {
+      const card = document.createElement("article");
+      card.className = "port";
+
+      const title = document.createElement("h2");
+      title.textContent = port.name;
+      card.appendChild(title);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.append(
+        makeTag("Versão " + (port.version || port.tag_name)),
+        makeTag(port.category),
+        makeTag(port.system)
+      );
+      card.appendChild(meta);
+
+      const description = document.createElement("p");
+      description.className = "description";
+      description.textContent = port.description;
+      card.appendChild(description);
+
+      const downloads = document.createElement("div");
+      downloads.className = "downloads";
+
+      for (const asset of port.assets) {
+        const link = document.createElement("a");
+        link.className = "download";
+        link.href = asset.browser_download_url;
+        link.textContent = "Baixar " + asset.name;
+        link.target = "_blank";
+        link.rel = "noopener";
+        downloads.appendChild(link);
+      }
+
+      card.appendChild(downloads);
+
+      const releaseInfo = document.createElement("div");
+      releaseInfo.className = "release-link";
+
+      const releaseLink = document.createElement("a");
+      releaseLink.href = port.html_url;
+      releaseLink.target = "_blank";
+      releaseLink.rel = "noopener";
+      releaseLink.textContent = "Ver publicação";
+      releaseInfo.appendChild(releaseLink);
+
+      card.appendChild(releaseInfo);
+      return card;
+    }
+
+    function renderCatalog() {
+      const term = searchBox.value.trim().toLowerCase();
+      const category = categoryBox.value;
+
+      const filtered = ports.filter(port => {
+        const matchesTerm =
+          `${port.name} ${port.description} ${port.category} ${port.system}`
+            .toLowerCase().includes(term);
+
+        const matchesCategory =
+          !category || port.category === category;
+
+        return matchesTerm && matchesCategory;
+      });
+
+      catalog.replaceChildren();
+
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = ports.length
+          ? "Nenhum port corresponde à pesquisa."
+          : "Ainda não há ports publicados. Volte mais tarde.";
+        catalog.appendChild(empty);
+        return;
+      }
+
+      for (const port of filtered) {
+        catalog.appendChild(createPortCard(port));
+      }
+    }
+
+    function updateCategories() {
+      const selected = categoryBox.value;
+      const categories = [...new Set(ports.map(p => p.category))]
+        .sort((a, b) => a.localeCompare(b));
+
+      categoryBox.replaceChildren();
+
+      const all = document.createElement("option");
+      all.value = "";
+      all.textContent = "Todas as categorias";
+      categoryBox.appendChild(all);
+
+      for (const category of categories) {
+        const option = document.createElement("option");
+        option.value = category;
+        option.textContent = category;
+        categoryBox.appendChild(option);
+      }
+
+      categoryBox.value = categories.includes(selected) ? selected : "";
+    }
+
+    async function loadCatalog() {
+      refreshButton.disabled = true;
+      statusBox.textContent = "Buscando ports publicados no GitHub...";
+      catalog.replaceChildren();
+
+      try {
+        const response = await fetch(API_URL, {
+          headers: { "Accept": "application/vnd.github+json" },
+          cache: "no-store"
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            response.status === 404
+              ? "Repositório não encontrado ou não público. Confira a configuração."
+              : `GitHub respondeu com erro HTTP ${response.status}.`
+          );
+        }
+
+        const releases = await response.json();
+
+        ports = releases
+          .filter(release => !release.draft && !release.prerelease)
+          .map(release => {
+            const meta = metadataFromBody(release.body);
+
+            const assets = (release.assets || []).filter(asset =>
+              asset.name.toLowerCase().endsWith(".zip")
+            );
+
+            return {
+              name: release.name || release.tag_name,
+              tag_name: release.tag_name,
+              version: meta.version,
+              category: meta.category,
+              system: meta.system,
+              description: meta.description,
+              assets,
+              html_url: release.html_url,
+              published_at: release.published_at
+            };
+          })
+          .filter(port => port.assets.length > 0);
+
+        updateCategories();
+        renderCatalog();
+
+        statusBox.textContent =
+          `${ports.length} port(s) encontrado(s) no catálogo.`;
+      } catch (error) {
+        statusBox.textContent = "Não foi possível carregar: " + error.message;
+        const help = document.createElement("div");
+        help.className = "empty";
+        help.textContent =
+          "Confira o nome do usuário, o repositório público e sua conexão. " +
+          "Também pode haver limite temporário de consultas à API do GitHub.";
+        catalog.appendChild(help);
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    searchBox.addEventListener("input", renderCatalog);
+    categoryBox.addEventListener("change", renderCatalog);
+    refreshButton.addEventListener("click", loadCatalog);
+
+    loadCatalog();
+  </script>
+</body>
+</html>
