@@ -1,0 +1,326 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enviar jogo - NEWMASTER</title>
+
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #090d16;
+  --panel: #141c2b;
+  --accent: #36d399;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+}
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 20px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  width: 100%;
+  max-width: 650px;
+  margin: 35px auto;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.logo {
+  font-size: 34px;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+header p { color: var(--muted); }
+
+.panel {
+  background: var(--panel);
+  padding: 25px;
+  border-radius: 15px;
+  border: 1px solid #293548;
+}
+
+h2 { margin-top: 0; }
+
+label {
+  display: block;
+  margin: 17px 0 7px;
+  font-weight: bold;
+}
+
+input, textarea, select {
+  width: 100%;
+  padding: 13px;
+  border-radius: 8px;
+  border: 1px solid #39465a;
+  background: #0b1220;
+  color: white;
+  font-size: 15px;
+}
+
+textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+input[type="file"] {
+  padding: 12px;
+}
+
+button {
+  width: 100%;
+  padding: 15px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #052016;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover { filter: brightness(1.1); }
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.status {
+  display: none;
+  padding: 13px;
+  margin-top: 17px;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+.info {
+  background: #102d38;
+  color: #a5f3fc;
+}
+
+.error {
+  background: #451a1a;
+  color: #fecaca;
+}
+
+.notice {
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.back {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  color: var(--accent);
+  text-decoration: none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+  <div class="logo">NEWMASTER</div>
+  <h1>Enviar novo jogo</h1>
+  <p>Compartilhe seu port com a comunidade!</p>
+</header>
+
+<div class="panel">
+
+<h2>Informações do jogo</h2>
+
+<form id="gameForm">
+
+<label for="developer">Nome do desenvolvedor</label>
+<input
+  id="developer"
+  type="text"
+  maxlength="80"
+  placeholder="Seu nome ou apelido"
+  required
+>
+
+<label for="email">Contato (opcional)</label>
+<input
+  id="email"
+  type="email"
+  maxlength="150"
+  placeholder="seu@email.com"
+>
+
+<label for="game">Nome do jogo</label>
+<input
+  id="game"
+  type="text"
+  maxlength="100"
+  placeholder="Nome do jogo"
+  required
+>
+
+<label for="version">Versão</label>
+<input
+  id="version"
+  type="text"
+  maxlength="30"
+  placeholder="1.0.0"
+  required
+>
+
+<label for="category">Categoria</label>
+<select id="category" required>
+  <option value="">Selecione</option>
+  <option value="Ação">Ação</option>
+  <option value="Aventura">Aventura</option>
+  <option value="Plataforma">Plataforma</option>
+  <option value="RPG">RPG</option>
+  <option value="Corrida">Corrida</option>
+  <option value="Arcade">Arcade</option>
+  <option value="Outros">Outros</option>
+</select>
+
+<label for="system">Sistema compatível</label>
+<select id="system" required>
+  <option value="">Selecione</option>
+  <option value="ArkOS">ArkOS</option>
+  <option value="AmberELEC">AmberELEC</option>
+  <option value="ROCKNIX">ROCKNIX</option>
+  <option value="Linux">Linux</option>
+  <option value="Outros">Outros</option>
+</select>
+
+<label for="description">Descrição do jogo</label>
+<textarea
+  id="description"
+  maxlength="2000"
+  placeholder="Explique o funcionamento, controles e compatibilidade..."
+  required
+></textarea>
+
+<label for="zip">Arquivo ZIP do jogo</label>
+<input
+  id="zip"
+  type="file"
+  accept=".zip,application/zip"
+  required
+>
+
+<p class="notice">
+  Somente arquivos ZIP. Envie apenas jogos e ports que você
+  tenha autorização para distribuir. O arquivo será submetido
+  à análise antes de qualquer publicação.
+</p>
+
+<label>
+  <input id="authorization" type="checkbox" required style="width:auto">
+  Confirmo que tenho autorização para distribuir este conteúdo.
+</label>
+
+<button id="submitButton" type="submit">
+  Preparar envio
+</button>
+
+<div id="status" class="status"></div>
+
+</form>
+</div>
+
+<a class="back" href="./index.html">← Voltar ao NEWMASTER</a>
+
+</div>
+
+<script>
+const form = document.getElementById("gameForm");
+const zipInput = document.getElementById("zip");
+const statusBox = document.getElementById("status");
+const submitButton = document.getElementById("submitButton");
+
+const MAX_SIZE = 2 * 1024 * 1024 * 1024;
+
+function showStatus(message, type) {
+  statusBox.style.display = "block";
+  statusBox.className = "status " + type;
+  statusBox.textContent = message;
+}
+
+zipInput.addEventListener("change", () => {
+  const file = zipInput.files[0];
+
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith(".zip")) {
+    zipInput.value = "";
+    showStatus("Selecione um arquivo ZIP válido.", "error");
+    return;
+  }
+
+  if (file.size > MAX_SIZE) {
+    zipInput.value = "";
+    showStatus("O ZIP ultrapassa o limite de 2 GB.", "error");
+    return;
+  }
+
+  showStatus(
+    "Arquivo selecionado: " + file.name +
+    " (" + (file.size / 1024 / 1024).toFixed(2) + " MB).",
+    "info"
+  );
+});
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const file = zipInput.files[0];
+
+  if (!file || !file.name.toLowerCase().endsWith(".zip")) {
+    showStatus("Selecione um arquivo ZIP válido.", "error");
+    return;
+  }
+
+  if (file.size > MAX_SIZE) {
+    showStatus("O arquivo é muito grande.", "error");
+    return;
+  }
+
+  const submission = {
+    developer: document.getElementById("developer").value.trim(),
+    email: document.getElementById("email").value.trim(),
+    game: document.getElementById("game").value.trim(),
+    version: document.getElementById("version").value.trim(),
+    category: document.getElementById("category").value,
+    system: document.getElementById("system").value,
+    description: document.getElementById("description").value.trim(),
+    zipName: file.name,
+    zipSize: file.size,
+    createdAt: new Date().toISOString()
+  };
+
+  console.log("Dados preparados:", submission);
+
+  showStatus(
+    "Formulário validado! O jogo e os dados foram preparados no navegador, mas ainda não foram enviados ao NEWMASTER. É necessário conectar uma API de recebimento para transmitir o ZIP e encaminhá-lo à aprovação do administrador.",
+    "info"
+  );
+});
+</script>
+
+</body>
+</html>
